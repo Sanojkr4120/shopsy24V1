@@ -31,7 +31,6 @@ const httpServer = createServer(app);
 // Use one unified allowedOrigins list
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  "https://saharsafoods.vercel.app",
   "https://saharsafoodstestsecond.vercel.app",
   "https://saharsafoodstestsecond-git-main-sk4120.vercel.app",
   "https://saharsafoodstestsecond-7648zhx0z-sk4120.vercel.app",
