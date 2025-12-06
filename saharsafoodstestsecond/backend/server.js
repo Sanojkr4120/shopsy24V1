@@ -20,6 +20,7 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import connectDB from './config/db.js';
 
 const app = express();
+app.set("trust proxy", 1); // Trust first proxy (Vercel Load Balancer)
 const httpServer = createServer(app);
 
 // Dynamic CORS - Allow all Vercel domains
