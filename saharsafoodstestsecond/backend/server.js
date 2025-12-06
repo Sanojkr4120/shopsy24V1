@@ -7,6 +7,8 @@ import { Server } from "socket.io";
 import compression from "compression";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import connectDB from "./config/db.js"; // Import cached connection logic
+
 import orderRoutes from "./routes/orderRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -19,17 +21,38 @@ import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Socket.IO Setup
+// Note: In strict Vercel Serverless, persistent WebSockets are not supported.
+// This setup works for local dev and might work on some Vercel configurations (like with specialized adapters),
+// but expect limited real-time functionality on standard Vercel functions.
 const io = new Server(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
   },
+  transports: ['polling', 'websocket'] // Force polling first for better compatibility
+});
+
+// Database Connection Middleware for Serverless
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("Database Connection Failed inside Middleware:", err);
+    res.status(500).json({ message: "Database Connection Error" });
+  }
 });
 
 // Security & Performance Middleware
 app.use(helmet());
 app.use(compression()); // Compress all responses
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true
+}));
 app.use(express.json());
 
 // Rate Limiting
@@ -41,20 +64,7 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Database Connection with Optimization
-mongoose
-  .connect(process.env.MONGO_URI, {
-    maxPoolSize: 100, // Maintain up to 100 socket connections
-    serverSelectionTimeoutMs: 5000, // Keep trying to send operations for 5 seconds
-    socketTimeoutMs: 45000, // Close sockets after 45 seconds of inactivity
-  })
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => {
-    console.error(`Error: ${err.message}`);
-    process.exit(1);
-  });
-
-// Socket.IO
+// Socket.IO Connection Handler
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -83,12 +93,16 @@ app.use("/api/pincodes", pincodeRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-
 const PORT = process.env.PORT || 5000;
 
 if (process.env.VERCEL !== "1") {
-  httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  // Only connect explicitly if not in serverless mode (serverless uses caching middleware)
+  connectDB().then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }).catch(err => {
+    console.error("Local DB Connect Error:", err);
   });
 }
 
