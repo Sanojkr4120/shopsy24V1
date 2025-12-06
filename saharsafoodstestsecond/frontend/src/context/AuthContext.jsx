@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import axios from 'axios';
+
 import api from '../utils/api';
 import { toast } from 'react-toastify';
 
@@ -15,17 +15,17 @@ export const AuthProvider = ({ children }) => {
             if (userInfo) {
                 // Optimistically set user to avoid flash of login screen
                 setUser(userInfo);
-                
+
                 try {
                     // Verify with backend and get fresh data (including role updates)
                     const { data } = await api.get('/api/auth/me');
-                    
+
                     // If the token in the response is different (e.g. refreshed), update it
                     // Note: /me usually returns user data. We keep the existing token unless the backend sends a new one.
                     // But our backend /me just returns user data, not a new token.
                     // So we merge the fresh user data with the existing token.
                     const updatedUser = { ...data, token: userInfo.token };
-                    
+
                     setUser(updatedUser);
                     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
                 } catch (error) {

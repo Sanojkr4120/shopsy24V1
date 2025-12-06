@@ -250,6 +250,11 @@ const updateProfile = asyncHandler(async (req, res) => {
 // @access  Public
 const googleAuthCallback = asyncHandler(async (req, res) => {
   const user = req.user;
+  
+  // Invalidate previous sessions
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+
   const token = generateToken(user.id, user.tokenVersion);
   
   // Calculate expiry date (30 days)
