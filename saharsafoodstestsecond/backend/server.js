@@ -8,12 +8,6 @@ import { Server } from 'socket.io';
 import compression from 'compression';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
-import { fileURLToPath } from 'url';
-// import mongoSanitize from 'express-mongo-sanitize';
-// import xss from 'xss-clean';
-// import hpp from 'hpp';
-
 import orderRoutes from './routes/orderRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
@@ -21,21 +15,18 @@ import adminRoutes from './routes/adminRoutes.js';
 import menuRoutes from './routes/menuRoutes.js';
 import areaRoutes from './routes/areaRoutes.js';
 import centerRoutes from './routes/centerRoutes.js';
-import pincodeRoutes from './routes/pincodeRoutes.js'; // Preserving existing functionality
+import pincodeRoutes from './routes/pincodeRoutes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import connectDB from './config/db.js';
 
 const app = express();
 const httpServer = createServer(app);
 
-// Use one unified allowedOrigins list
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  "http://localhost:5173",
   "https://saharsafoodstestsecond.vercel.app",
-  "https://saharsafoodstestsecond-git-main-sk4120.vercel.app",
-  "https://saharsafoodstestsecond-7648zhx0z-sk4120.vercel.app",
-  // Allow all vercel.app for previews (CORS fix)
-  /\.vercel\.app$/
+  "https://saharsafoodstestsecond-git-main-sk4120.vercel.app"
 ];
 
 const io = new Server(httpServer, {
@@ -44,8 +35,11 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
   },
-  transports: ['polling', 'websocket'] // Added polling support for Vercel
 });
+
+import mongoSanitize from 'express-mongo-sanitize';
+import xss from 'xss-clean';
+import hpp from 'hpp';
 
 // Security & Performance Middleware
 app.use(helmet());
@@ -53,15 +47,7 @@ app.use(compression()); // Compress all responses
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    
-    // Check against strings or regex
-    const isAllowed = allowedOrigins.some(o => {
-      if (o instanceof RegExp) return o.test(origin);
-      return o === origin;
-    });
-
-    if (isAllowed) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -71,17 +57,16 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 }));
-
 app.use(express.json());
 
 // Data Sanitization against NoSQL query injection
-// app.use(mongoSanitize());
+app.use(mongoSanitize());
 
 // Data Sanitization against XSS
-// app.use(xss());
+app.use(xss());
 
 // Prevent Parameter Pollution
-// app.use(hpp());
+app.use(hpp());
 
 // Global Rate Limiting
 const limiter = rateLimit({
@@ -102,23 +87,19 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
+// Database Connection is handled in api/index.js for Vercel
+// and in the startup block below for local development
+
 // Socket.IO
 io.on("connection", (socket) => {
-    // console.log("User connected:", socket.id);
-  
-    socket.on("updateEmployeeLocation", (data) => {
-      // Broadcast location to all clients (admins/dashboards)
-      io.emit("employeeLocationUpdate", data);
-    });
-  
-    socket.on("disconnect", () => {
-      // User disconnected
-    });
-});
+  socket.on("updateEmployeeLocation", (data) => {
+    // Broadcast location to all clients (admins/dashboards)
+    io.emit("employeeLocationUpdate", data);
+  });
 
-// Explicitly handle Socket.IO polling requests for Serverless environment
-app.all('/socket.io/*', (req, res) => {
-    io.engine.handleRequest(req, res);
+  socket.on("disconnect", () => {
+    // User disconnected
+  });
 });
 
 // Make io accessible in routes
@@ -126,6 +107,9 @@ app.use((req, res, next) => {
   req.io = io;
   next();
 });
+
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,13 +122,28 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/areas', areaRoutes);
 app.use('/api/centers', centerRoutes);
-app.use('/api/pincodes', pincodeRoutes); // Added back your pincode routes
+app.use('/api/pincodes', pincodeRoutes);
 
-// Serve Frontend in Production: 
-// On Vercel, frontend is served separately. We only need a status check here.
-app.get('/', (req, res) => {
-  res.send('API is running....Server is Ready');
-});
+// Serve Frontend in Production
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../frontend/dist');
+
+  if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+
+    app.get('*', (req, res) =>
+      res.sendFile(path.resolve(frontendPath, 'index.html'))
+    );
+  } else {
+    app.get('/', (req, res) => {
+      res.send('API is running....');
+    });
+  }
+} else {
+  app.get('/', (req, res) => {
+    res.send('API is running....');
+  });
+}
 
 // Error Handling Middleware
 app.use(notFound);
@@ -152,7 +151,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
+if (process.env.NODE_ENV !== 'production') {
   connectDB().then(() => {
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
