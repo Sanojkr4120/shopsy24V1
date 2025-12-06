@@ -75,10 +75,6 @@ const Navbar = () => {
                 <User size={24} />
               </Link>
             )}
-
-            <button className="md:hidden">
-              <MenuIcon size={24} />
-            </button>
           </div>
         </div>
       </nav>
