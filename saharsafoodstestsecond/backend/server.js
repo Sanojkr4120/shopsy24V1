@@ -19,24 +19,38 @@ import centerRoutes from "./routes/centerRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
-const app = express();
-const httpServer = createServer(app);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  process.env.FRONTEND_URL
+];
 
-// Socket.IO Setup
-// Note: In strict Vercel Serverless, persistent WebSockets are not supported.
-// This setup works for local dev and might work on some Vercel configurations (like with specialized adapters),
-// but expect limited real-time functionality on standard Vercel functions.
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
+// Dynamic CORS Configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list or matches Vercel preview URLs
+    if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
   },
-  transports: ['polling', 'websocket'] // Force polling first for better compatibility
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+};
+
+const io = new Server(httpServer, {
+  cors: corsOptions,
+  transports: ['polling', 'websocket'],
+  path: '/socket.io/'
 });
 
 // Database Connection Middleware for Serverless
 app.use(async (req, res, next) => {
+  if (req.path.startsWith('/socket.io')) return next(); // Skip DB for socket handshake if preferred, but usually needed for session
   try {
     await connectDB();
     next();
@@ -48,12 +62,15 @@ app.use(async (req, res, next) => {
 
 // Security & Performance Middleware
 app.use(helmet());
-app.use(compression()); // Compress all responses
-app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    credentials: true
-}));
+app.use(compression());
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Explicitly handle Socket.IO polling requests for Serverless environment
+// Vercel only exports 'app', so we must route socket requests manually to the engine.
+app.all('/socket.io/*', (req, res) => {
+  io.engine.handleRequest(req, res);
+});
 
 // Rate Limiting
 const limiter = rateLimit({
