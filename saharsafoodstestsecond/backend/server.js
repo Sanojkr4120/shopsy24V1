@@ -10,9 +10,9 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
-import hpp from 'hpp';
+// import mongoSanitize from 'express-mongo-sanitize';
+// import xss from 'xss-clean';
+// import hpp from 'hpp';
 
 import orderRoutes from './routes/orderRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
@@ -73,13 +73,13 @@ app.use(cors({
 app.use(express.json());
 
 // Data Sanitization against NoSQL query injection
-app.use(mongoSanitize());
+// app.use(mongoSanitize());
 
 // Data Sanitization against XSS
-app.use(xss());
+// app.use(xss());
 
 // Prevent Parameter Pollution
-app.use(hpp());
+// app.use(hpp());
 
 // Global Rate Limiting
 const limiter = rateLimit({
