@@ -17,8 +17,17 @@ const placeOrder = asyncHandler(async (req, res) => {
 
     // Check Booking Time
     if (settings) {
+        // Get current time in IST (India Standard Time = UTC + 5:30)
         const now = new Date();
-        const currentTime = now.getHours() * 60 + now.getMinutes(); // Current time in minutes
+        // Convert to IST by adding 5 hours 30 minutes offset
+        const istOffset = 5.5 * 60; // IST is UTC + 5:30 (in minutes)
+        const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+        let currentTimeIST = utcMinutes + istOffset;
+        
+        // Handle day overflow (if IST goes past midnight)
+        if (currentTimeIST >= 24 * 60) {
+            currentTimeIST -= 24 * 60;
+        }
 
         const [openHour, openMinute] = (settings.openingTime || '09:00').split(':').map(Number);
         const openTime = openHour * 60 + openMinute;
@@ -26,7 +35,9 @@ const placeOrder = asyncHandler(async (req, res) => {
         const [closeHour, closeMinute] = (settings.closingTime || '21:00').split(':').map(Number);
         const closeTime = closeHour * 60 + closeMinute;
 
-        if (currentTime < openTime || currentTime > closeTime) {
+        console.log(`[Booking Time Check] Current IST Time: ${Math.floor(currentTimeIST / 60)}:${currentTimeIST % 60}, Open: ${openHour}:${openMinute}, Close: ${closeHour}:${closeMinute}`);
+
+        if (currentTimeIST < openTime || currentTimeIST > closeTime) {
             const formatTime = (timeStr) => {
                 const [hour, minute] = timeStr.split(':');
                 const h = parseInt(hour, 10);
