@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
-import { io } from 'socket.io-client';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 import { AuthContext } from '../../context/AuthContext';
@@ -9,7 +8,6 @@ import { Download, Trash2, Calendar, Share2, Search, Bell, X, Volume2, VolumeX }
 
 const ManageOrders = () => {
     const [orders, setOrders] = useState([]);
-    const [socket, setSocket] = useState(null);
     const { user } = useContext(AuthContext);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -176,50 +174,6 @@ const ManageOrders = () => {
 
     // Reference to track previous orders for polling comparison
     const previousOrdersRef = useRef([]);
-    const isSocketConnected = useRef(false);
-
-    useEffect(() => {
-        const newSocket = io(import.meta.env.VITE_API_URL);
-        setSocket(newSocket);
-
-        // Track socket connection status
-        newSocket.on('connect', () => {
-            console.log('✅ Socket connected successfully');
-            isSocketConnected.current = true;
-        });
-
-        newSocket.on('connect_error', () => {
-            console.log('⚠️ Socket connection failed, using HTTP polling as fallback');
-            isSocketConnected.current = false;
-        });
-
-        newSocket.on('disconnect', () => {
-            console.log('⚠️ Socket disconnected');
-            isSocketConnected.current = false;
-        });
-
-        return () => newSocket.close();
-    }, []);
-
-    useEffect(() => {
-        if (!socket) return;
-
-        socket.on('newOrder', (order) => {
-            toast.info(`New Order Received: #${order._id.slice(-6)}`);
-            setOrders(prev => [order, ...prev]);
-            // Trigger voice notification and add to bell icon
-            addNotification(order);
-        });
-
-        socket.on('orderStatusChanged', (updatedOrder) => {
-            setOrders(prev => prev.map(o => o._id === updatedOrder._id ? updatedOrder : o));
-        });
-
-        socket.on('orderDeleted', (deletedOrderId) => {
-            setOrders(prev => prev.filter(order => order._id !== deletedOrderId));
-            toast.info(`Order #${deletedOrderId.slice(-6)} has been deleted`);
-        });
-    }, [socket]);
 
     // Initial fetch
     useEffect(() => {
@@ -249,24 +203,11 @@ const ManageOrders = () => {
                 const prevOrderIds = new Set(prevOrders.map(o => o._id));
                 const newlyAddedOrders = newOrders.filter(order => !prevOrderIds.has(order._id));
 
-                // Trigger notifications for new orders (only if socket is not connected)
-                if (!isSocketConnected.current && newlyAddedOrders.length > 0) {
+                // Trigger notifications for new orders
+                if (newlyAddedOrders.length > 0) {
                     newlyAddedOrders.forEach(order => {
                         toast.info(`New Order Received: #${order._id.slice(-6)}`);
                         addNotification(order);
-                    });
-                }
-
-                // Detect status changes
-                if (!isSocketConnected.current) {
-                    newOrders.forEach(newOrder => {
-                        const prevOrder = prevOrders.find(o => o._id === newOrder._id);
-                        if (prevOrder && prevOrder.status !== newOrder.status) {
-                            console.log(`Order #${newOrder._id.slice(-6)} status changed: ${prevOrder.status} → ${newOrder.status}`);
-                        }
-                        if (prevOrder && prevOrder.paymentStatus !== newOrder.paymentStatus) {
-                            console.log(`Order #${newOrder._id.slice(-6)} payment status changed: ${prevOrder.paymentStatus} → ${newOrder.paymentStatus}`);
-                        }
                     });
                 }
 
@@ -275,7 +216,7 @@ const ManageOrders = () => {
                 previousOrdersRef.current = newOrders;
 
             } catch (err) {
-                console.error('Polling error:', err);
+                // Silently handle polling errors
             }
         };
 

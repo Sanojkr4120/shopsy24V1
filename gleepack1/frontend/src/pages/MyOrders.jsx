@@ -1,13 +1,10 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
-import { io } from 'socket.io-client';
+import React, { useEffect, useState, useContext } from 'react';
 import api from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
 
 const MyOrders = () => {
     const [orders, setOrders] = useState([]);
-    const [socket, setSocket] = useState(null);
     const { user } = useContext(AuthContext);
-    const isSocketConnected = useRef(false);
 
     const getTodayDate = () => {
         const d = new Date();
@@ -23,40 +20,6 @@ const MyOrders = () => {
         return `${day}/${month}/${year.slice(-2)}`;
     };
 
-    useEffect(() => {
-        const newSocket = io(import.meta.env.VITE_API_URL);
-        setSocket(newSocket);
-
-        // Track socket connection status
-        newSocket.on('connect', () => {
-            console.log('✅ Socket connected (MyOrders)');
-            isSocketConnected.current = true;
-        });
-
-        newSocket.on('connect_error', () => {
-            console.log('⚠️ Socket connection failed (MyOrders), using HTTP polling');
-            isSocketConnected.current = false;
-        });
-
-        newSocket.on('disconnect', () => {
-            isSocketConnected.current = false;
-        });
-
-        return () => newSocket.close();
-    }, []);
-
-    useEffect(() => {
-        if (!socket) return;
-
-        socket.on('orderStatusChanged', (updatedOrder) => {
-            setOrders(prev => prev.map(o => o._id === updatedOrder._id ? updatedOrder : o));
-        });
-
-        socket.on('orderDeleted', (deletedOrderId) => {
-            setOrders(prev => prev.filter(o => o._id !== deletedOrderId));
-        });
-    }, [socket]);
-
     // Initial fetch
     useEffect(() => {
         if (user) {
@@ -68,7 +31,7 @@ const MyOrders = () => {
         }
     }, [user]);
 
-    // HTTP Polling for real-time updates (fallback for Vercel)
+    // HTTP Polling for real-time updates
     useEffect(() => {
         if (!user) return;
 
@@ -79,7 +42,7 @@ const MyOrders = () => {
                 const res = await api.get('/api/orders/myorders');
                 setOrders(res.data);
             } catch (err) {
-                console.error('Polling error:', err);
+                // Silently handle polling errors
             }
         };
 
