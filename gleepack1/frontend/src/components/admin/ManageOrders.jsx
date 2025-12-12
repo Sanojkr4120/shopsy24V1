@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 import { AuthContext } from '../../context/AuthContext';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { Download, Trash2, Calendar, Share2, Search } from 'lucide-react';
+import { Download, Trash2, Calendar, Share2, Search, Bell, X, Volume2, VolumeX } from 'lucide-react';
 
 const ManageOrders = () => {
     const [orders, setOrders] = useState([]);
@@ -14,6 +14,165 @@ const ManageOrders = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // New Order Notification States
+    const [notifications, setNotifications] = useState([]);
+    const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+    const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+    const notificationDropdownRef = useRef(null);
+    const audioContextRef = useRef(null);
+
+    // Play notification sound - Multiple beeps
+    const playNotificationSound = () => {
+        if (!isSoundEnabled) return;
+
+        try {
+            // Create a new AudioContext or reuse existing one
+            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            const audioContext = audioContextRef.current;
+
+            // Resume audio context if suspended (browser policy)
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const now = audioContext.currentTime;
+
+            // Create multiple beeps for alert
+            for (let i = 0; i < 3; i++) {
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+
+                oscillator.frequency.value = 1000;
+                oscillator.type = 'sine';
+
+                // Start and stop each beep
+                const startTime = now + i * 0.3;
+                gain.gain.setValueAtTime(0.5, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+
+                oscillator.start(startTime);
+                oscillator.stop(startTime + 0.2);
+            }
+        } catch (error) {
+            console.error("Audio error:", error);
+        }
+    };
+
+    // Simplified text-to-speech - Just key details
+    const speakNotification = (order) => {
+        if (!isSoundEnabled) return;
+
+        try {
+            // Play alert beep first
+            playNotificationSound();
+
+            setTimeout(() => {
+                const synth = window.speechSynthesis;
+
+                if (synth) {
+                    // Cancel any previous speech
+                    synth.cancel();
+
+                    // Wait for voices to load
+                    const loadVoices = () => {
+                        const voices = synth.getVoices();
+
+                        if (voices.length === 0) {
+                            console.log("Voices not loaded, retrying...");
+                            setTimeout(loadVoices, 100);
+                            return;
+                        }
+
+                        // Simple message - just name and order ID
+                        const customerName = order.customerName || 'Customer';
+                        const orderId = order._id ? order._id.substring(0, 8).toUpperCase() : 'NEW';
+                        const totalAmount = order.totalAmount || 0;
+
+                        const message = `New order received! Customer name is ${customerName}. Order ID is ${orderId}. Amount: ${totalAmount} rupees.`;
+
+                        const utterance = new SpeechSynthesisUtterance(message);
+
+                        // Find English voice
+                        const englishVoices = voices.filter(voice => voice.lang.includes('en'));
+                        if (englishVoices.length > 0) {
+                            utterance.voice = englishVoices[0];
+                            console.log("Using voice:", englishVoices[0].name);
+                        }
+
+                        utterance.rate = 0.9;
+                        utterance.pitch = 1;
+                        utterance.volume = 1;
+                        utterance.lang = 'en-US';
+
+                        utterance.onstart = () => {
+                            console.log("✓ Speaking started");
+                        };
+
+                        utterance.onend = () => {
+                            console.log("✓ Speaking ended");
+                        };
+
+                        utterance.onerror = (event) => {
+                            console.error("Speech error:", event.error);
+                        };
+
+                        console.log("Speaking:", message);
+                        synth.speak(utterance);
+                    };
+
+                    // Start voice loading
+                    loadVoices();
+                } else {
+                    console.warn("Speech Synthesis not supported in this browser");
+                }
+            }, 900);
+        } catch (error) {
+            console.error("Error:", error);
+        }
+    };
+
+    // Add notification with voice alert
+    const addNotification = (order) => {
+        const notif = {
+            id: Date.now(),
+            order: order,
+            timestamp: new Date().toLocaleTimeString(),
+        };
+        setNotifications((prev) => [notif, ...prev]);
+
+        // Text to speech announcement
+        speakNotification(order);
+    };
+
+    // Clear a single notification
+    const clearNotification = (notifId) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+    };
+
+    // Clear all notifications
+    const clearAllNotifications = () => {
+        setNotifications([]);
+        setShowNotificationDropdown(false);
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
+                setShowNotificationDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const newSocket = io(import.meta.env.VITE_API_URL);
@@ -28,6 +187,8 @@ const ManageOrders = () => {
         socket.on('newOrder', (order) => {
             toast.info(`New Order Received: #${order._id.slice(-6)}`);
             setOrders(prev => [order, ...prev]);
+            // Trigger voice notification and add to bell icon
+            addNotification(order);
         });
 
         socket.on('orderStatusChanged', (updatedOrder) => {
@@ -180,7 +341,97 @@ Status: ${order.status}
     return (
         <div>
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                <h2 className="text-2xl font-bold text-orange-500">Manage Orders</h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-2xl font-bold text-orange-500">Manage Orders</h2>
+
+                    {/* Notification Bell Icon */}
+                    <div className="relative" ref={notificationDropdownRef}>
+                        <button
+                            onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                            className="relative p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition"
+                            title="New Order Notifications"
+                        >
+                            <Bell size={22} className={notifications.length > 0 ? "text-orange-400 animate-pulse" : "text-gray-400"} />
+                            {notifications.length > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-bounce">
+                                    {notifications.length > 9 ? '9+' : notifications.length}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* Notification Dropdown */}
+                        {showNotificationDropdown && (
+                            <div className="absolute top-12 right-0 w-80 md:w-96 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 max-h-96 overflow-hidden">
+                                <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900/50">
+                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                        <Bell size={18} className="text-orange-400" />
+                                        New Orders
+                                        {notifications.length > 0 && (
+                                            <span className="text-sm bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full">
+                                                {notifications.length}
+                                            </span>
+                                        )}
+                                    </h3>
+                                    {notifications.length > 0 && (
+                                        <button
+                                            onClick={clearAllNotifications}
+                                            className="text-sm text-gray-400 hover:text-red-400 transition"
+                                        >
+                                            Clear All
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="overflow-y-auto max-h-72">
+                                    {notifications.length === 0 ? (
+                                        <div className="p-6 text-center text-gray-500">
+                                            <Bell size={32} className="mx-auto mb-2 opacity-50" />
+                                            <p>No new order notifications</p>
+                                        </div>
+                                    ) : (
+                                        notifications.map((notif) => (
+                                            <div
+                                                key={notif.id}
+                                                className="p-4 border-b border-gray-700/50 hover:bg-gray-700/50 transition flex justify-between items-start gap-3"
+                                            >
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-white">
+                                                        🛒 New Order #{notif.order._id?.slice(-6)}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        Customer: {notif.order.customerName}
+                                                    </p>
+                                                    <p className="text-xs text-orange-400 mt-1">
+                                                        ₹{notif.order.totalAmount}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        {notif.timestamp}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => clearNotification(notif.id)}
+                                                    className="text-gray-500 hover:text-red-400 transition p-1"
+                                                    title="Dismiss"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Sound Toggle Button */}
+                    <button
+                        onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+                        className={`p-2 rounded-full transition ${isSoundEnabled ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 'bg-red-600/20 text-red-400 hover:bg-red-600/30'}`}
+                        title={isSoundEnabled ? "Sound On - Click to mute" : "Sound Off - Click to unmute"}
+                    >
+                        {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                    </button>
+                </div>
 
                 <div className="flex flex-col md:flex-row items-center gap-2 bg-gray-800 p-3 rounded-lg border border-gray-700">
                     <div className="relative w-full md:w-64">
