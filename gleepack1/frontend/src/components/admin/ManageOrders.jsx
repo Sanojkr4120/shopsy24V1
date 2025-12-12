@@ -88,12 +88,15 @@ const ManageOrders = () => {
                             return;
                         }
 
-                        // Simple message - just name and order ID
+                        // Message with Customer Name, Order Placed, Order ID, and Package Name
                         const customerName = order.customerName || 'Customer';
-                        const orderId = order._id ? order._id.substring(0, 8).toUpperCase() : 'NEW';
-                        const totalAmount = order.totalAmount || 0;
+                        const orderId = order._id ? order._id.slice(-6).toUpperCase() : 'NEW';
 
-                        const message = `New order received! Customer name is ${customerName}. Order ID is ${orderId}. Amount: ${totalAmount} rupees.`;
+                        const packageNames = order.items && order.items.length > 0
+                            ? order.items.map(item => item.name).join(', ')
+                            : 'items';
+
+                        const message = `${customerName} has placed an order. Order ID is ${orderId}. Package is ${packageNames}.`;
 
                         const utterance = new SpeechSynthesisUtterance(message);
 
