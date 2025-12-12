@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
@@ -7,6 +7,7 @@ const MyOrders = () => {
     const [orders, setOrders] = useState([]);
     const [socket, setSocket] = useState(null);
     const { user } = useContext(AuthContext);
+    const isSocketConnected = useRef(false);
 
     const getTodayDate = () => {
         const d = new Date();
@@ -26,6 +27,21 @@ const MyOrders = () => {
         const newSocket = io(import.meta.env.VITE_API_URL);
         setSocket(newSocket);
 
+        // Track socket connection status
+        newSocket.on('connect', () => {
+            console.log('✅ Socket connected (MyOrders)');
+            isSocketConnected.current = true;
+        });
+
+        newSocket.on('connect_error', () => {
+            console.log('⚠️ Socket connection failed (MyOrders), using HTTP polling');
+            isSocketConnected.current = false;
+        });
+
+        newSocket.on('disconnect', () => {
+            isSocketConnected.current = false;
+        });
+
         return () => newSocket.close();
     }, []);
 
@@ -41,15 +57,37 @@ const MyOrders = () => {
         });
     }, [socket]);
 
+    // Initial fetch
     useEffect(() => {
         if (user) {
             api.get('/api/orders/myorders')
                 .then(res => setOrders(res.data))
                 .catch(err => {
                     console.error(err);
-                    // toast.error('Failed to fetch orders'); // Optional: Add toast if desired
                 });
         }
+    }, [user]);
+
+    // HTTP Polling for real-time updates (fallback for Vercel)
+    useEffect(() => {
+        if (!user) return;
+
+        const POLLING_INTERVAL = 5000; // 5 seconds
+
+        const pollOrders = async () => {
+            try {
+                const res = await api.get('/api/orders/myorders');
+                setOrders(res.data);
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        };
+
+        // Start polling interval
+        const intervalId = setInterval(pollOrders, POLLING_INTERVAL);
+
+        // Cleanup on unmount
+        return () => clearInterval(intervalId);
     }, [user]);
 
     return (

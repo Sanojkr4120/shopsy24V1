@@ -174,9 +174,29 @@ const ManageOrders = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Reference to track previous orders for polling comparison
+    const previousOrdersRef = useRef([]);
+    const isSocketConnected = useRef(false);
+
     useEffect(() => {
         const newSocket = io(import.meta.env.VITE_API_URL);
         setSocket(newSocket);
+
+        // Track socket connection status
+        newSocket.on('connect', () => {
+            console.log('✅ Socket connected successfully');
+            isSocketConnected.current = true;
+        });
+
+        newSocket.on('connect_error', () => {
+            console.log('⚠️ Socket connection failed, using HTTP polling as fallback');
+            isSocketConnected.current = false;
+        });
+
+        newSocket.on('disconnect', () => {
+            console.log('⚠️ Socket disconnected');
+            isSocketConnected.current = false;
+        });
 
         return () => newSocket.close();
     }, []);
@@ -201,12 +221,69 @@ const ManageOrders = () => {
         });
     }, [socket]);
 
+    // Initial fetch
     useEffect(() => {
         if (user) {
             api.get('/api/orders')
-                .then(res => setOrders(res.data))
+                .then(res => {
+                    setOrders(res.data);
+                    previousOrdersRef.current = res.data;
+                })
                 .catch(err => console.error(err));
         }
+    }, [user]);
+
+    // HTTP Polling for real-time updates (fallback for Vercel)
+    useEffect(() => {
+        if (!user) return;
+
+        const POLLING_INTERVAL = 5000; // 5 seconds
+
+        const pollOrders = async () => {
+            try {
+                const res = await api.get('/api/orders');
+                const newOrders = res.data;
+                const prevOrders = previousOrdersRef.current;
+
+                // Detect new orders (orders that exist in newOrders but not in prevOrders)
+                const prevOrderIds = new Set(prevOrders.map(o => o._id));
+                const newlyAddedOrders = newOrders.filter(order => !prevOrderIds.has(order._id));
+
+                // Trigger notifications for new orders (only if socket is not connected)
+                if (!isSocketConnected.current && newlyAddedOrders.length > 0) {
+                    newlyAddedOrders.forEach(order => {
+                        toast.info(`New Order Received: #${order._id.slice(-6)}`);
+                        addNotification(order);
+                    });
+                }
+
+                // Detect status changes
+                if (!isSocketConnected.current) {
+                    newOrders.forEach(newOrder => {
+                        const prevOrder = prevOrders.find(o => o._id === newOrder._id);
+                        if (prevOrder && prevOrder.status !== newOrder.status) {
+                            console.log(`Order #${newOrder._id.slice(-6)} status changed: ${prevOrder.status} → ${newOrder.status}`);
+                        }
+                        if (prevOrder && prevOrder.paymentStatus !== newOrder.paymentStatus) {
+                            console.log(`Order #${newOrder._id.slice(-6)} payment status changed: ${prevOrder.paymentStatus} → ${newOrder.paymentStatus}`);
+                        }
+                    });
+                }
+
+                // Update state and reference
+                setOrders(newOrders);
+                previousOrdersRef.current = newOrders;
+
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        };
+
+        // Start polling interval
+        const intervalId = setInterval(pollOrders, POLLING_INTERVAL);
+
+        // Cleanup on unmount
+        return () => clearInterval(intervalId);
     }, [user]);
 
     const updateStatus = async (id, status, isPaymentUpdate = false) => {

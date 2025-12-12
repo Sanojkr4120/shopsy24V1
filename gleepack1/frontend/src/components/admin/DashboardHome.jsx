@@ -18,17 +18,34 @@ const DashboardHome = () => {
 
     const [loadingStats, setLoadingStats] = useState(true);
 
+    // Fetch stats function
+    const fetchStats = async (showLoading = false) => {
+        if (showLoading) setLoadingStats(true);
+        try {
+            const res = await api.get('/api/admin/stats');
+            setStats(res.data);
+        } catch (err) {
+            console.error(err);
+            if (showLoading) toast.error("Failed to load dashboard stats");
+        } finally {
+            if (showLoading) setLoadingStats(false);
+        }
+    };
+
+    // Initial fetch
     useEffect(() => {
-        api.get('/api/admin/stats')
-            .then(res => {
-                setStats(res.data);
-                setLoadingStats(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setLoadingStats(false);
-                toast.error("Failed to load dashboard stats");
-            });
+        fetchStats(true);
+    }, []);
+
+    // HTTP Polling for real-time dashboard updates
+    useEffect(() => {
+        const POLLING_INTERVAL = 10000; // 10 seconds for dashboard
+
+        const intervalId = setInterval(() => {
+            fetchStats(false); // Silent update (no loading indicator)
+        }, POLLING_INTERVAL);
+
+        return () => clearInterval(intervalId);
     }, []);
 
     const handleRevenueClick = async () => {
