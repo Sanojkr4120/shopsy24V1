@@ -114,13 +114,13 @@ const Menu = () => {
                 >
                     <div className="inline-flex items-center gap-2 bg-orange-500/20 text-orange-400 px-4 py-2 rounded-full text-sm font-medium mb-4">
                         <Sparkles size={16} />
-                        Celebration Essentials
+                        Relax Sleep Essentials
                     </div>
                     <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">
                         Our <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Collection</span>
                     </h1>
                     <p className="text-gray-400 max-w-2xl mx-auto text-lg">
-                        Discover premium party supplies, decorations, and celebration kits for every special moment.
+                        Discover premium quality sleep essentials for every special moment.
                     </p>
                 </motion.div>
 

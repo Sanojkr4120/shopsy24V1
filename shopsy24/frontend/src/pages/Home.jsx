@@ -110,7 +110,7 @@ const Home = () => {
             </div>
 
             {/* Premium Hero Carousel Section */}
-            <div className="relative bg-slate-900 overflow-hidden h-[70vh] min-h-[600px]">
+            <div className="relative bg-slate-900 overflow-hidden h-[85vh] sm:h-[70vh] min-h-[500px] sm:min-h-[600px]">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={currentSlide}
@@ -127,34 +127,34 @@ const Home = () => {
                             transition={{ duration: 6, ease: "linear" }}
                             src={heroSlides[currentSlide].image}
                             alt={heroSlides[currentSlide].title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover opacity-60 sm:opacity-100"
                         />
 
-                        {/* Cinematic Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/50 to-transparent">
-                            <div className="container mx-auto px-4 md:px-8 h-full flex items-center">
-                                <div className="max-w-2xl">
+                        {/* Cinematic Overlay - Vertical gradient for mobile, Horizontal for desktop */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-900/60 to-transparent sm:bg-gradient-to-r sm:from-slate-950/90 sm:via-slate-900/50 sm:to-transparent">
+                            <div className="container mx-auto px-4 md:px-8 h-full flex items-end sm:items-center pb-24 sm:pb-0">
+                                <div className="max-w-2xl w-full">
                                     <motion.div
                                         initial={{ opacity: 0, y: 40 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.5, duration: 0.8 }}
                                     >
-                                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-200 text-sm font-medium mb-6 border border-white/10 uppercase tracking-widest">
+                                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-200 text-xs sm:text-sm font-medium mb-4 sm:mb-6 border border-white/10 uppercase tracking-widest">
                                             <Sparkles size={14} className="text-yellow-400" />
                                             Premium Collection
                                         </div>
-                                        <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-300 mb-6 leading-tight tracking-tight">
+                                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-300 mb-4 sm:mb-6 leading-tight tracking-tight">
                                             {heroSlides[currentSlide].title}
                                         </h1>
-                                        <p className="text-lg md:text-2xl text-slate-300 mb-10 font-light leading-relaxed max-w-xl">
+                                        <p className="text-base sm:text-lg md:text-2xl text-slate-300 mb-6 sm:mb-10 font-light leading-relaxed max-w-xl line-clamp-3 sm:line-clamp-none">
                                             {heroSlides[currentSlide].subtitle}
                                         </p>
                                         <div className="flex gap-4">
                                             <Link
                                                 to={heroSlides[currentSlide].link}
-                                                className="group relative px-8 py-4 bg-white text-slate-950 text-lg font-bold rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)]"
+                                                className="group relative px-6 py-3 sm:px-8 sm:py-4 bg-white text-slate-950 text-base sm:text-lg font-bold rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] w-full sm:w-auto text-center"
                                             >
-                                                <span className="relative z-10 flex items-center gap-2">
+                                                <span className="relative z-10 flex items-center justify-center gap-2">
                                                     {heroSlides[currentSlide].cta} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                                                 </span>
                                             </Link>
@@ -167,16 +167,16 @@ const Home = () => {
                 </AnimatePresence>
 
                 {/* Premium Navigation Controls */}
-                <div className="absolute bottom-10 left-0 w-full z-20">
-                    <div className="container mx-auto px-4 flex items-center justify-between border-t border-white/10 pt-6">
+                <div className="absolute bottom-6 sm:bottom-10 left-0 w-full z-20">
+                    <div className="container mx-auto px-4 flex items-center justify-between border-t border-white/10 pt-4 sm:pt-6">
                         {/* Progress Indicators */}
-                        <div className="flex gap-3">
+                        <div className="flex gap-2 sm:gap-4">
                             {heroSlides.map((_, idx) => (
                                 <button
                                     key={idx}
                                     onClick={() => setCurrentSlide(idx)}
-                                    className="relative h-1 bg-white/20 rounded-full overflow-hidden transition-all duration-300"
-                                    style={{ width: idx === currentSlide ? '60px' : '30px' }}
+                                    className={`relative rounded-full overflow-hidden transition-all duration-300 bg-white/20 ${idx === currentSlide ? 'w-8 sm:w-24' : 'w-3 sm:w-12'
+                                        } h-0.5 sm:h-1.5`}
                                 >
                                     {idx === currentSlide && (
                                         <motion.div
@@ -192,8 +192,8 @@ const Home = () => {
                         </div>
 
                         {/* Counter */}
-                        <div className="text-white/50 font-mono text-sm">
-                            <span className="text-white font-bold text-lg">0{currentSlide + 1}</span> / 0{heroSlides.length}
+                        <div className="text-white/50 font-mono text-xs sm:text-sm">
+                            <span className="text-white font-bold text-base sm:text-lg">0{currentSlide + 1}</span> / 0{heroSlides.length}
                         </div>
                     </div>
                 </div>
